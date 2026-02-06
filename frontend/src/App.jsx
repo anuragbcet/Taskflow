@@ -1,31 +1,28 @@
-import { useState } from 'react'
-import { Router,Routes,Route, BrowserRouter } from 'react-router-dom'
-import './App.css'
-
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
 import Homepage from './pages/Homepage'
 import Login from './pages/Login'
-import ProtectedRoute from './utils/ProtectedRoute'
-import Dashboard from './pages/Dashboard'
 import Register from './pages/Register'
+import Dashboard from './pages/Dashboard'
 
+function ProtectedRoute({ children }) {
+  const token = localStorage.getItem('token')
+  return token ? children : <Navigate to="/login" replace />
+}
 
 function App() {
-  
-
   return (
-  <BrowserRouter>
-    <Routes>
-      <Route path='/' element={<Homepage/>}/>
-      <Route path='/login' element={<Login/>}/>
-      <Route path='/register' element={<Register/>}/>
-      <Route path='/dashboard' element={
-        // <ProtectedRoute>
-        //     <Dashboard/>
-        // </ProtectedRoute>
-        <Dashboard/>
-      }/>
-    </Routes>
-  </BrowserRouter>
+    <BrowserRouter>
+      <Routes>
+        <Route path='/' element={<Homepage />} />
+        <Route path='/login' element={<Login />} />
+        <Route path='/register' element={<Register />} />
+        <Route path='/dashboard' element={
+          <ProtectedRoute>
+            <Dashboard />
+          </ProtectedRoute>
+        } />
+      </Routes>
+    </BrowserRouter>
   )
 }
 

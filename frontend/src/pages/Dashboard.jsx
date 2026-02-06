@@ -1,73 +1,31 @@
 import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import {
   PlusIcon,
   XMarkIcon,
   CheckIcon,
-  EllipsisHorizontalIcon,
   TrashIcon,
   PencilIcon,
-  FunnelIcon,
   MagnifyingGlassIcon,
-  CalendarIcon,
-  TagIcon,
-  ClockIcon,
-  CheckCircleIcon,
-  ExclamationTriangleIcon,
-  SparklesIcon,
-  // RocketIcon,
+  SunIcon,
+  MoonIcon,
   ChevronDownIcon,
-  ListBulletIcon,
-  ArchiveBoxIcon,
-  BellIcon,
-  UserCircleIcon,
-  Cog6ToothIcon,
   ArrowRightOnRectangleIcon,
-  RocketLaunchIcon,
 } from "@heroicons/react/24/outline";
 
-const Dashboard = () => {
-  const [tasks, setTasks] = useState([
-    {
-      id: 1,
-      title: "Design new landing page",
-      description: "Create a modern and responsive design",
-      priority: "high",
-      dueDate: "2024-01-20",
-      status: "in-progress",
-      category: "Design",
-      subtasks: 3,
-      completed: 1,
-    },
-    {
-      id: 2,
-      title: "Review client feedback",
-      description: "Go through and prioritize feedback",
-      priority: "medium",
-      dueDate: "2024-01-18",
-      status: "pending",
-      category: "Review",
-      subtasks: 0,
-      completed: 0,
-    },
-    {
-      id: 3,
-      title: "Deploy to production",
-      description: "Push latest changes to production",
-      priority: "high",
-      dueDate: "2024-01-17",
-      status: "completed",
-      category: "Development",
-      subtasks: 5,
-      completed: 5,
-    },
-  ]);
+const API_URL = "http://localhost:5000";
 
+const Dashboard = () => {
+  const navigate = useNavigate();
+  const [isDark, setIsDark] = useState(false);
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [filterStatus, setFilterStatus] = useState("all");
   const [searchTerm, setSearchTerm] = useState("");
-  const [sortBy, setSortBy] = useState("dueDate");
   const [showUserMenu, setShowUserMenu] = useState(false);
+  const [userName, setUserName] = useState("");
 
   const [formData, setFormData] = useState({
     title: "",
@@ -76,6 +34,64 @@ const Dashboard = () => {
     dueDate: "",
     category: "General",
   });
+
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
+      setIsDark(true);
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+
+    const token = localStorage.getItem("token");
+    if (!token) {
+      navigate("/login");
+      return;
+    }
+
+    try {
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      setUserName(payload.email || "User");
+    } catch (e) {
+      setUserName("User");
+    }
+
+    fetchTasks();
+  }, [navigate]);
+
+  const getAuthHeaders = () => {
+    const token = localStorage.getItem("token");
+    return {
+      "Content-Type": "application/json",
+      "Authorization": `Bearer ${token}`
+    };
+  };
+
+  const fetchTasks = async () => {
+    try {
+      const res = await fetch(`${API_URL}/tasks`, {
+        headers: getAuthHeaders()
+      });
+      if (res.status === 403) {
+        localStorage.removeItem("token");
+        navigate("/login");
+        return;
+      }
+      const data = await res.json();
+      setTasks(data);
+    } catch (err) {
+      console.error("Failed to fetch tasks");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const toggleTheme = () => {
+    const newTheme = !isDark;
+    setIsDark(newTheme);
+    document.documentElement.setAttribute("data-theme", newTheme ? "dark" : "light");
+    localStorage.setItem("theme", newTheme ? "dark" : "light");
+  };
 
   const handleAddTask = () => {
     setFormData({
@@ -90,69 +106,84 @@ const Dashboard = () => {
   };
 
   const handleEditTask = (task) => {
-    setFormData(task);
+    setFormData({
+      title: task.title,
+      description: task.description || "",
+      priority: task.priority,
+      dueDate: task.dueDate ? task.dueDate.split('T')[0] : "",
+      category: task.category,
+    });
     setEditingId(task.id);
     setShowModal(true);
   };
 
-  const handleSaveTask = (e) => {
+  const handleSaveTask = async (e) => {
     e.preventDefault();
     if (!formData.title.trim()) return;
 
-    if (editingId) {
-      setTasks(
-        tasks.map((t) =>
-          t.id === editingId ? { ...formData, id: editingId } : t
-        )
-      );
-    } else {
-      const newTask = {
-        ...formData,
-        id: Date.now(),
-        status: "pending",
-        subtasks: 0,
-        completed: 0,
-      };
-      setTasks([newTask, ...tasks]);
+    try {
+      if (editingId) {
+        const res = await fetch(`${API_URL}/tasks/${editingId}`, {
+          method: "PUT",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(formData)
+        });
+        if (res.ok) {
+          const updated = await res.json();
+          setTasks(tasks.map(t => t.id === editingId ? updated : t));
+        }
+      } else {
+        const res = await fetch(`${API_URL}/tasks`, {
+          method: "POST",
+          headers: getAuthHeaders(),
+          body: JSON.stringify(formData)
+        });
+        if (res.ok) {
+          const newTask = await res.json();
+          setTasks([newTask, ...tasks]);
+        }
+      }
+      setShowModal(false);
+    } catch (err) {
+      console.error("Failed to save task");
     }
-
-    setShowModal(false);
   };
 
-  const handleDeleteTask = (id) => {
-    setTasks(tasks.filter((t) => t.id !== id));
+  const handleDeleteTask = async (id) => {
+    try {
+      const res = await fetch(`${API_URL}/tasks/${id}`, {
+        method: "DELETE",
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        setTasks(tasks.filter(t => t.id !== id));
+      }
+    } catch (err) {
+      console.error("Failed to delete task");
+    }
   };
 
-  const toggleTaskStatus = (id) => {
-    setTasks(
-      tasks.map((t) =>
-        t.id === id
-          ? {
-              ...t,
-              status: t.status === "completed" ? "pending" : "completed",
-            }
-          : t
-      )
-    );
+  const toggleTaskStatus = async (id) => {
+    try {
+      const res = await fetch(`${API_URL}/tasks/${id}/toggle`, {
+        method: "PATCH",
+        headers: getAuthHeaders()
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setTasks(tasks.map(t => t.id === id ? updated : t));
+      }
+    } catch (err) {
+      console.error("Failed to toggle task");
+    }
   };
 
   const filteredTasks = tasks.filter((task) => {
     const matchesSearch =
       task.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      task.description.toLowerCase().includes(searchTerm.toLowerCase());
-    const matchesFilter =
-      filterStatus === "all" || task.status === filterStatus;
+      (task.description && task.description.toLowerCase().includes(searchTerm.toLowerCase()));
+    const matchesFilter = filterStatus === "all" || task.status === filterStatus;
     return matchesSearch && matchesFilter;
-  });
-
-  const sortedTasks = [...filteredTasks].sort((a, b) => {
-    if (sortBy === "dueDate") {
-      return new Date(a.dueDate) - new Date(b.dueDate);
-    } else if (sortBy === "priority") {
-      const priorityOrder = { high: 0, medium: 1, low: 2 };
-      return priorityOrder[a.priority] - priorityOrder[b.priority];
-    }
-    return 0;
   });
 
   const stats = {
@@ -162,67 +193,147 @@ const Dashboard = () => {
     pending: tasks.filter((t) => t.status === "pending").length,
   };
 
-  const getPriorityColor = (priority) => {
-    if (priority === "high")
-      return "bg-red-500/20 text-red-400 border-red-500/50";
-    if (priority === "medium")
-      return "bg-yellow-500/20 text-yellow-400 border-yellow-500/50";
-    return "bg-green-500/20 text-green-400 border-green-500/50";
-  };
-
-  const getStatusIcon = (status) => {
-    if (status === "completed") return "✓";
-    if (status === "in-progress") return "⏳";
-    return "◯";
-  };
-
   const formatDate = (date) => {
+    if (!date) return "";
     return new Date(date).toLocaleDateString("en-US", {
       month: "short",
       day: "numeric",
     });
   };
 
-  return (
-    <div className="min-h-screen bg-black text-white">
-      {/* Header */}
-      <header className="fixed w-full top-0 z-50 bg-gray-900/80 border-b border-gray-800 backdrop-blur-xl">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-4 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg">
-              <RocketLaunchIcon className="h-6 w-6 text-white" />
-            </div>
-            <span className="text-2xl font-bold bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
-              TaskFlow
-            </span>
-          </div>
+  const handleLogout = () => {
+    localStorage.removeItem("token");
+    navigate("/login");
+  };
 
-          <div className="flex items-center gap-4">
-            <button className="p-2 hover:bg-gray-800 rounded-lg transition-colors">
-              <BellIcon className="h-6 w-6 text-gray-400" />
+  if (loading) {
+    return (
+      <div style={{
+        minHeight: "100vh",
+        backgroundColor: "var(--bg-primary)",
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center"
+      }}>
+        <p style={{ color: "var(--text-muted)" }}>Loading...</p>
+      </div>
+    );
+  }
+
+  return (
+    <div style={{ minHeight: "100vh", backgroundColor: "var(--bg-primary)" }}>
+      <header style={{
+        position: "fixed",
+        top: 0,
+        left: 0,
+        right: 0,
+        zIndex: 50,
+        backgroundColor: "var(--bg-primary)",
+        borderBottom: "1px solid var(--border)"
+      }}>
+        <div style={{
+          maxWidth: "1200px",
+          margin: "0 auto",
+          padding: "0 1.5rem",
+          height: "64px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between"
+        }}>
+          <span
+            onClick={() => navigate("/")}
+            style={{
+              fontSize: "1.25rem",
+              fontWeight: 600,
+              letterSpacing: "-0.02em",
+              cursor: "pointer"
+            }}
+          >
+            TaskFlow
+          </span>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "0.5rem" }}>
+            <button
+              onClick={toggleTheme}
+              style={{
+                padding: "0.5rem",
+                borderRadius: "8px",
+                border: "none",
+                backgroundColor: "transparent",
+                color: "var(--text-secondary)",
+                cursor: "pointer",
+                display: "flex"
+              }}
+            >
+              {isDark ? <SunIcon style={{ width: 20, height: 20 }} /> : <MoonIcon style={{ width: 20, height: 20 }} />}
             </button>
 
-            <div className="relative">
+            <div style={{ position: "relative" }}>
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
-                className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                style={{
+                  padding: "0.5rem 0.75rem",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border)",
+                  backgroundColor: "transparent",
+                  color: "var(--text-primary)",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "0.5rem",
+                  fontSize: "0.875rem"
+                }}
               >
-                <UserCircleIcon className="h-6 w-6 text-gray-400" />
+                <div style={{
+                  width: "24px",
+                  height: "24px",
+                  borderRadius: "50%",
+                  backgroundColor: "var(--accent)",
+                  color: "var(--bg-primary)",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "0.75rem",
+                  fontWeight: 600
+                }}>
+                  {userName.charAt(0).toUpperCase()}
+                </div>
+                <ChevronDownIcon style={{ width: 14, height: 14 }} />
               </button>
 
               {showUserMenu && (
-                <div className="absolute right-0 mt-2 w-48 bg-gray-900 border border-gray-800 rounded-lg shadow-lg overflow-hidden">
-                  <div className="px-4 py-3 border-b border-gray-800">
-                    <p className="text-sm font-semibold">John Doe</p>
-                    <p className="text-xs text-gray-500">john@example.com</p>
+                <div style={{
+                  position: "absolute",
+                  right: 0,
+                  marginTop: "0.5rem",
+                  width: "200px",
+                  backgroundColor: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                  overflow: "hidden",
+                  boxShadow: "var(--shadow-lg)"
+                }}>
+                  <div style={{ padding: "0.875rem 1rem", borderBottom: "1px solid var(--border)" }}>
+                    <div style={{ fontWeight: 500, fontSize: "0.875rem" }}>{userName}</div>
                   </div>
-                  <button className="w-full text-left px-4 py-2 hover:bg-gray-800 transition-colors text-sm flex items-center gap-2">
-                    <Cog6ToothIcon className="h-4 w-4" />
-                    Settings
-                  </button>
-                  <button className="w-full text-left px-4 py-2 hover:bg-gray-800 transition-colors text-sm text-red-400 flex items-center gap-2 border-t border-gray-800">
-                    <ArrowRightOnRectangleIcon className="h-4 w-4" />
-                    Logout
+                  <button
+                    onClick={handleLogout}
+                    style={{
+                      width: "100%",
+                      padding: "0.75rem 1rem",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.5rem",
+                      fontSize: "0.875rem",
+                      color: "#ef4444",
+                      backgroundColor: "transparent",
+                      border: "none",
+                      cursor: "pointer",
+                      textAlign: "left"
+                    }}
+                  >
+                    <ArrowRightOnRectangleIcon style={{ width: 16, height: 16 }} />
+                    Sign out
                   </button>
                 </div>
               )}
@@ -231,345 +342,459 @@ const Dashboard = () => {
         </div>
       </header>
 
-      <div className="pt-20 pb-12">
-        {/* Hero Section */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-12">
-          <div className="flex justify-between items-start mb-8">
+      <main style={{ paddingTop: "96px", paddingBottom: "3rem" }}>
+        <div style={{ maxWidth: "1200px", margin: "0 auto", padding: "0 1.5rem" }}>
+          <div style={{
+            display: "flex",
+            justifyContent: "space-between",
+            alignItems: "flex-start",
+            marginBottom: "2rem",
+            flexWrap: "wrap",
+            gap: "1rem"
+          }}>
             <div>
-              <h1 className="text-4xl font-bold mb-2">Welcome Back! 👋</h1>
-              <p className="text-gray-400">
-                You have {stats.pending} pending and {stats.inProgress} in-progress tasks
+              <h1 style={{ fontSize: "1.75rem", fontWeight: 700, marginBottom: "0.25rem" }}>
+                Welcome back 👋
+              </h1>
+              <p style={{ color: "var(--text-secondary)", fontSize: "0.9375rem" }}>
+                You have {stats.pending + stats.inProgress} tasks to complete
               </p>
             </div>
             <button
               onClick={handleAddTask}
-              className="bg-gradient-to-r from-blue-600 to-cyan-600 px-6 py-3 rounded-lg font-bold hover:shadow-lg hover:shadow-blue-500/50 transition-all flex items-center gap-2"
+              style={{
+                padding: "0.625rem 1.25rem",
+                fontSize: "0.875rem",
+                fontWeight: 500,
+                backgroundColor: "var(--accent)",
+                color: "var(--bg-primary)",
+                border: "none",
+                borderRadius: "8px",
+                cursor: "pointer",
+                display: "flex",
+                alignItems: "center",
+                gap: "0.375rem"
+              }}
             >
-              <PlusIcon className="h-5 w-5" />
+              <PlusIcon style={{ width: 16, height: 16 }} />
               New Task
             </button>
           </div>
 
-          {/* Stats */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div style={{
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))",
+            gap: "1rem",
+            marginBottom: "2rem"
+          }}>
             {[
-              {
-                label: "Total Tasks",
-                value: stats.total,
-                icon: ListBulletIcon,
-                color: "from-blue-500 to-cyan-500",
-              },
-              {
-                label: "Completed",
-                value: stats.completed,
-                icon: CheckCircleIcon,
-                color: "from-green-500 to-emerald-500",
-              },
-              {
-                label: "In Progress",
-                value: stats.inProgress,
-                icon: ClockIcon,
-                color: "from-yellow-500 to-orange-500",
-              },
-              {
-                label: "Pending",
-                value: stats.pending,
-                icon: ExclamationTriangleIcon,
-                color: "from-red-500 to-pink-500",
-              },
+              { label: "Total", value: stats.total },
+              { label: "Completed", value: stats.completed },
+              { label: "In Progress", value: stats.inProgress },
+              { label: "Pending", value: stats.pending },
             ].map((stat, i) => (
               <div
                 key={i}
-                className="bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-gray-700 transition-all"
+                style={{
+                  padding: "1.25rem",
+                  backgroundColor: "var(--bg-card)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "10px"
+                }}
               >
-                <div className={`bg-gradient-to-br ${stat.color} p-3 rounded-lg w-fit mb-4`}>
-                  <stat.icon className="h-6 w-6 text-white" />
+                <div style={{ fontSize: "1.5rem", fontWeight: 700, marginBottom: "0.25rem" }}>
+                  {stat.value}
                 </div>
-                <p className="text-3xl font-bold mb-1">{stat.value}</p>
-                <p className="text-gray-500 text-sm">{stat.label}</p>
+                <div style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>
+                  {stat.label}
+                </div>
               </div>
             ))}
           </div>
-        </section>
 
-        {/* Filters and Search */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mb-8">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            {/* Search */}
-            <div className="relative">
-              <MagnifyingGlassIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
+          <div style={{
+            display: "flex",
+            gap: "0.75rem",
+            marginBottom: "1.5rem",
+            flexWrap: "wrap"
+          }}>
+            <div style={{ position: "relative", flex: "1", minWidth: "200px" }}>
+              <MagnifyingGlassIcon style={{
+                position: "absolute",
+                left: "0.875rem",
+                top: "50%",
+                transform: "translateY(-50%)",
+                width: 18,
+                height: 18,
+                color: "var(--text-muted)"
+              }} />
               <input
                 type="text"
                 placeholder="Search tasks..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-800 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors text-white placeholder-gray-500"
+                style={{
+                  width: "100%",
+                  padding: "0.625rem 0.875rem 0.625rem 2.5rem",
+                  fontSize: "0.875rem",
+                  backgroundColor: "var(--input-bg)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                  color: "var(--text-primary)",
+                  outline: "none"
+                }}
               />
             </div>
 
-            {/* Filter */}
-            <div className="relative">
-              <FunnelIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
-              <select
-                value={filterStatus}
-                onChange={(e) => setFilterStatus(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-800 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors text-white appearance-none cursor-pointer"
-              >
-                <option value="all">All Tasks</option>
-                <option value="pending">Pending</option>
-                <option value="in-progress">In Progress</option>
-                <option value="completed">Completed</option>
-              </select>
-              <ChevronDownIcon className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 pointer-events-none" />
-            </div>
-
-            {/* Sort */}
-            <div className="relative">
-              <span className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500">📊</span>
-              <select
-                value={sortBy}
-                onChange={(e) => setSortBy(e.target.value)}
-                className="w-full pl-12 pr-4 py-3 bg-gray-900 border border-gray-800 rounded-lg focus:outline-none focus:border-cyan-500 transition-colors text-white appearance-none cursor-pointer"
-              >
-                <option value="dueDate">Sort by Due Date</option>
-                <option value="priority">Sort by Priority</option>
-              </select>
-              <ChevronDownIcon className="absolute right-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500 pointer-events-none" />
-            </div>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              style={{
+                padding: "0.625rem 2rem 0.625rem 0.875rem",
+                fontSize: "0.875rem",
+                backgroundColor: "var(--input-bg)",
+                border: "1px solid var(--border)",
+                borderRadius: "8px",
+                color: "var(--text-primary)",
+                outline: "none",
+                cursor: "pointer"
+              }}
+            >
+              <option value="all">All</option>
+              <option value="pending">Pending</option>
+              <option value="in-progress">In Progress</option>
+              <option value="completed">Completed</option>
+            </select>
           </div>
-        </section>
 
-        {/* Tasks List */}
-        <section className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          {sortedTasks.length === 0 ? (
-            <div className="text-center py-12">
-              <SparklesIcon className="h-16 w-16 text-gray-600 mx-auto mb-4" />
-              <h3 className="text-2xl font-bold mb-2">No tasks found</h3>
-              <p className="text-gray-500 mb-6">
-                {searchTerm ? "Try adjusting your search" : "Create a new task to get started"}
+          {filteredTasks.length === 0 ? (
+            <div style={{
+              textAlign: "center",
+              padding: "4rem 2rem",
+              color: "var(--text-muted)"
+            }}>
+              <div style={{ fontSize: "2.5rem", marginBottom: "1rem" }}>📝</div>
+              <h3 style={{ fontSize: "1.125rem", fontWeight: 600, marginBottom: "0.5rem", color: "var(--text-primary)" }}>
+                No tasks found
+              </h3>
+              <p style={{ fontSize: "0.9375rem" }}>
+                {searchTerm ? "Try a different search" : "Create a task to get started"}
               </p>
-              {!searchTerm && (
-                <button
-                  onClick={handleAddTask}
-                  className="bg-gradient-to-r from-blue-600 to-cyan-600 px-6 py-3 rounded-lg font-bold hover:shadow-lg hover:shadow-blue-500/50 transition-all inline-flex items-center gap-2"
-                >
-                  <PlusIcon className="h-5 w-5" />
-                  Create Task
-                </button>
-              )}
             </div>
           ) : (
-            <div className="space-y-4">
-              {sortedTasks.map((task) => (
+            <div style={{ display: "flex", flexDirection: "column", gap: "0.75rem" }}>
+              {filteredTasks.map((task) => (
                 <div
                   key={task.id}
-                  className="group bg-gray-900 border border-gray-800 rounded-xl p-6 hover:border-gray-700 transition-all hover:shadow-lg hover:shadow-gray-900/50"
+                  style={{
+                    padding: "1rem 1.25rem",
+                    backgroundColor: "var(--bg-card)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "10px",
+                    display: "flex",
+                    alignItems: "flex-start",
+                    gap: "0.875rem",
+                    transition: "border-color 0.15s ease"
+                  }}
+                  onMouseEnter={(e) => e.currentTarget.style.borderColor = "var(--border-hover)"}
+                  onMouseLeave={(e) => e.currentTarget.style.borderColor = "var(--border)"}
                 >
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex items-start gap-4 flex-1">
-                      <button
-                        onClick={() => toggleTaskStatus(task.id)}
-                        className={`mt-1 flex-shrink-0 w-6 h-6 rounded-full border-2 flex items-center justify-center transition-all ${
-                          task.status === "completed"
-                            ? "bg-cyan-500 border-cyan-500"
-                            : "border-gray-600 hover:border-cyan-500"
-                        }`}
-                      >
-                        {task.status === "completed" && (
-                          <CheckIcon className="h-4 w-4 text-white" />
-                        )}
-                      </button>
+                  <button
+                    onClick={() => toggleTaskStatus(task.id)}
+                    style={{
+                      marginTop: "2px",
+                      width: "20px",
+                      height: "20px",
+                      borderRadius: "50%",
+                      border: task.status === "completed" ? "none" : "2px solid var(--border)",
+                      backgroundColor: task.status === "completed" ? "var(--accent)" : "transparent",
+                      cursor: "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      flexShrink: 0
+                    }}
+                  >
+                    {task.status === "completed" && (
+                      <CheckIcon style={{ width: 12, height: 12, color: "var(--bg-primary)" }} />
+                    )}
+                  </button>
 
-                      <div className="flex-1">
-                        <div className="flex items-center gap-3 mb-2">
-                          <h3
-                            className={`text-lg font-semibold ${
-                              task.status === "completed"
-                                ? "line-through text-gray-600"
-                                : ""
-                            }`}
-                          >
-                            {task.title}
-                          </h3>
-                          <span
-                            className={`px-3 py-1 rounded-full text-xs font-semibold border ${getPriorityColor(
-                              task.priority
-                            )}`}
-                          >
-                            {task.priority}
-                          </span>
-                        </div>
-
-                        <p className="text-gray-400 text-sm mb-3">
-                          {task.description}
-                        </p>
-
-                        <div className="flex flex-wrap items-center gap-4 text-sm">
-                          <div className="flex items-center gap-2 text-gray-500">
-                            <CalendarIcon className="h-4 w-4" />
-                            {formatDate(task.dueDate)}
-                          </div>
-
-                          <div className="flex items-center gap-2 text-gray-500">
-                            <TagIcon className="h-4 w-4" />
-                            {task.category}
-                          </div>
-
-                          {task.subtasks > 0 && (
-                            <div className="flex items-center gap-2 text-gray-500">
-                              <ListBulletIcon className="h-4 w-4" />
-                              {task.completed}/{task.subtasks}
-                            </div>
-                          )}
-
-                          {task.status === "in-progress" && (
-                            <div className="flex items-center gap-2 text-blue-400 ml-auto">
-                              <ClockIcon className="h-4 w-4 animate-spin" />
-                              In Progress
-                            </div>
-                          )}
-                        </div>
-                      </div>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "0.625rem", marginBottom: "0.25rem" }}>
+                      <span style={{
+                        fontSize: "0.9375rem",
+                        fontWeight: 500,
+                        textDecoration: task.status === "completed" ? "line-through" : "none",
+                        color: task.status === "completed" ? "var(--text-muted)" : "var(--text-primary)"
+                      }}>
+                        {task.title}
+                      </span>
+                      <span style={{
+                        fontSize: "0.6875rem",
+                        fontWeight: 500,
+                        padding: "0.125rem 0.5rem",
+                        borderRadius: "4px",
+                        textTransform: "uppercase",
+                        letterSpacing: "0.025em",
+                        backgroundColor: task.priority === "high" ? (isDark ? "rgba(239, 68, 68, 0.15)" : "rgba(239, 68, 68, 0.1)") :
+                          task.priority === "medium" ? (isDark ? "rgba(245, 158, 11, 0.15)" : "rgba(245, 158, 11, 0.1)") :
+                            (isDark ? "rgba(34, 197, 94, 0.15)" : "rgba(34, 197, 94, 0.1)"),
+                        color: task.priority === "high" ? "#ef4444" :
+                          task.priority === "medium" ? "#f59e0b" : "#22c55e"
+                      }}>
+                        {task.priority}
+                      </span>
                     </div>
-
-                    {/* Actions */}
-                    <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button
-                        onClick={() => handleEditTask(task)}
-                        className="p-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-cyan-400"
-                      >
-                        <PencilIcon className="h-5 w-5" />
-                      </button>
-                      <button
-                        onClick={() => handleDeleteTask(task.id)}
-                        className="p-2 hover:bg-gray-800 rounded-lg transition-colors text-gray-400 hover:text-red-400"
-                      >
-                        <TrashIcon className="h-5 w-5" />
-                      </button>
+                    {task.description && (
+                      <p style={{
+                        fontSize: "0.8125rem",
+                        color: "var(--text-muted)",
+                        marginBottom: "0.5rem"
+                      }}>
+                        {task.description}
+                      </p>
+                    )}
+                    <div style={{
+                      display: "flex",
+                      gap: "1rem",
+                      fontSize: "0.75rem",
+                      color: "var(--text-muted)"
+                    }}>
+                      {task.dueDate && <span>{formatDate(task.dueDate)}</span>}
+                      <span>{task.category}</span>
                     </div>
+                  </div>
+
+                  <div style={{ display: "flex", gap: "0.25rem" }}>
+                    <button
+                      onClick={() => handleEditTask(task)}
+                      style={{
+                        padding: "0.375rem",
+                        borderRadius: "6px",
+                        border: "none",
+                        backgroundColor: "transparent",
+                        color: "var(--text-muted)",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <PencilIcon style={{ width: 16, height: 16 }} />
+                    </button>
+                    <button
+                      onClick={() => handleDeleteTask(task.id)}
+                      style={{
+                        padding: "0.375rem",
+                        borderRadius: "6px",
+                        border: "none",
+                        backgroundColor: "transparent",
+                        color: "var(--text-muted)",
+                        cursor: "pointer"
+                      }}
+                    >
+                      <TrashIcon style={{ width: 16, height: 16 }} />
+                    </button>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </section>
-      </div>
+        </div>
+      </main>
 
-      {/* Modal */}
       {showModal && (
-        <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
-          <div className="bg-gray-900 border border-gray-800 rounded-2xl max-w-2xl w-full max-h-96 overflow-y-auto">
-            {/* Modal Header */}
-            <div className="sticky top-0 bg-gray-900 border-b border-gray-800 px-6 py-4 flex justify-between items-center">
-              <h2 className="text-2xl font-bold">
-                {editingId ? "Edit Task" : "Create New Task"}
+        <div style={{
+          position: "fixed",
+          inset: 0,
+          backgroundColor: isDark ? "rgba(0,0,0,0.7)" : "rgba(0,0,0,0.4)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          padding: "1.5rem",
+          zIndex: 100
+        }}>
+          <div style={{
+            width: "100%",
+            maxWidth: "480px",
+            backgroundColor: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderRadius: "12px",
+            overflow: "hidden"
+          }}>
+            <div style={{
+              padding: "1.25rem 1.5rem",
+              borderBottom: "1px solid var(--border)",
+              display: "flex",
+              justifyContent: "space-between",
+              alignItems: "center"
+            }}>
+              <h2 style={{ fontSize: "1.125rem", fontWeight: 600 }}>
+                {editingId ? "Edit Task" : "New Task"}
               </h2>
               <button
                 onClick={() => setShowModal(false)}
-                className="p-2 hover:bg-gray-800 rounded-lg transition-colors"
+                style={{
+                  padding: "0.375rem",
+                  borderRadius: "6px",
+                  border: "none",
+                  backgroundColor: "transparent",
+                  cursor: "pointer",
+                  color: "var(--text-muted)"
+                }}
               >
-                <XMarkIcon className="h-6 w-6" />
+                <XMarkIcon style={{ width: 20, height: 20 }} />
               </button>
             </div>
 
-            {/* Modal Content */}
-            <div className="p-6">
-              <div className="space-y-6">
+            <form onSubmit={handleSaveTask} style={{ padding: "1.5rem" }}>
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.5rem" }}>
+                  Title
+                </label>
+                <input
+                  type="text"
+                  value={formData.title}
+                  onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                  placeholder="Task title"
+                  style={{
+                    width: "100%",
+                    padding: "0.625rem 0.875rem",
+                    fontSize: "0.875rem",
+                    backgroundColor: "var(--input-bg)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "8px",
+                    color: "var(--text-primary)",
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              <div style={{ marginBottom: "1.25rem" }}>
+                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.5rem" }}>
+                  Description
+                </label>
+                <textarea
+                  value={formData.description}
+                  onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                  placeholder="Add a description"
+                  rows="3"
+                  style={{
+                    width: "100%",
+                    padding: "0.625rem 0.875rem",
+                    fontSize: "0.875rem",
+                    backgroundColor: "var(--input-bg)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "8px",
+                    color: "var(--text-primary)",
+                    outline: "none",
+                    resize: "none"
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "1rem", marginBottom: "1.25rem" }}>
                 <div>
-                  <label className="block text-sm font-semibold mb-2">
-                    Task Title
+                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.5rem" }}>
+                    Priority
+                  </label>
+                  <select
+                    value={formData.priority}
+                    onChange={(e) => setFormData({ ...formData, priority: e.target.value })}
+                    style={{
+                      width: "100%",
+                      padding: "0.625rem 0.875rem",
+                      fontSize: "0.875rem",
+                      backgroundColor: "var(--input-bg)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "8px",
+                      color: "var(--text-primary)",
+                      outline: "none"
+                    }}
+                  >
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.5rem" }}>
+                    Due Date
                   </label>
                   <input
-                    type="text"
-                    value={formData.title}
-                    onChange={(e) =>
-                      setFormData({ ...formData, title: e.target.value })
-                    }
-                    placeholder="Enter task title"
-                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-cyan-500 text-white placeholder-gray-500"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold mb-2">
-                    Description
-                  </label>
-                  <textarea
-                    value={formData.description}
-                    onChange={(e) =>
-                      setFormData({ ...formData, description: e.target.value })
-                    }
-                    placeholder="Enter task description"
-                    rows="3"
-                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-cyan-500 text-white placeholder-gray-500 resize-none"
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-semibold mb-2">
-                      Priority
-                    </label>
-                    <select
-                      value={formData.priority}
-                      onChange={(e) =>
-                        setFormData({ ...formData, priority: e.target.value })
-                      }
-                      className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-cyan-500 text-white appearance-none cursor-pointer"
-                    >
-                      <option value="low">Low</option>
-                      <option value="medium">Medium</option>
-                      <option value="high">High</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-semibold mb-2">
-                      Due Date
-                    </label>
-                    <input
-                      type="date"
-                      value={formData.dueDate}
-                      onChange={(e) =>
-                        setFormData({ ...formData, dueDate: e.target.value })
-                      }
-                      className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-cyan-500 text-white"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-semibold mb-2">
-                    Category
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.category}
-                    onChange={(e) =>
-                      setFormData({ ...formData, category: e.target.value })
-                    }
-                    placeholder="e.g., Design, Development, Review"
-                    className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-cyan-500 text-white placeholder-gray-500"
+                    type="date"
+                    value={formData.dueDate}
+                    onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                    style={{
+                      width: "100%",
+                      padding: "0.625rem 0.875rem",
+                      fontSize: "0.875rem",
+                      backgroundColor: "var(--input-bg)",
+                      border: "1px solid var(--border)",
+                      borderRadius: "8px",
+                      color: "var(--text-primary)",
+                      outline: "none"
+                    }}
                   />
                 </div>
               </div>
 
-              {/* Modal Footer */}
-              <div className="flex gap-4 mt-8 pt-6 border-t border-gray-800">
+              <div style={{ marginBottom: "1.5rem" }}>
+                <label style={{ display: "block", fontSize: "0.875rem", fontWeight: 500, marginBottom: "0.5rem" }}>
+                  Category
+                </label>
+                <input
+                  type="text"
+                  value={formData.category}
+                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  placeholder="e.g., Work, Personal"
+                  style={{
+                    width: "100%",
+                    padding: "0.625rem 0.875rem",
+                    fontSize: "0.875rem",
+                    backgroundColor: "var(--input-bg)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "8px",
+                    color: "var(--text-primary)",
+                    outline: "none"
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", gap: "0.75rem" }}>
                 <button
+                  type="button"
                   onClick={() => setShowModal(false)}
-                  className="flex-1 px-4 py-3 bg-gray-800 hover:bg-gray-700 rounded-lg font-semibold transition-colors"
+                  style={{
+                    flex: 1,
+                    padding: "0.75rem",
+                    fontSize: "0.875rem",
+                    fontWeight: 500,
+                    backgroundColor: "transparent",
+                    border: "1px solid var(--border)",
+                    borderRadius: "8px",
+                    color: "var(--text-primary)",
+                    cursor: "pointer"
+                  }}
                 >
                   Cancel
                 </button>
                 <button
-                  onClick={handleSaveTask}
-                  className="flex-1 px-4 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 hover:shadow-lg hover:shadow-blue-500/50 rounded-lg font-semibold transition-all"
+                  type="submit"
+                  style={{
+                    flex: 1,
+                    padding: "0.75rem",
+                    fontSize: "0.875rem",
+                    fontWeight: 500,
+                    backgroundColor: "var(--accent)",
+                    border: "none",
+                    borderRadius: "8px",
+                    color: "var(--bg-primary)",
+                    cursor: "pointer"
+                  }}
                 >
-                  {editingId ? "Update Task" : "Create Task"}
+                  {editingId ? "Update" : "Create"}
                 </button>
               </div>
-            </div>
+            </form>
           </div>
         </div>
       )}

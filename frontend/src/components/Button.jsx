@@ -1,11 +1,45 @@
 import React from "react";
 
-const Button = ({ label, onClick, type = "button", className ="" }) => {
+const Button = ({ label, onClick, type = "button", variant = "primary", className = "", disabled = false }) => {
+  const baseStyles = {
+    padding: "0.625rem 1.25rem",
+    fontSize: "0.875rem",
+    fontWeight: 500,
+    borderRadius: "8px",
+    cursor: disabled ? "not-allowed" : "pointer",
+    transition: "all 0.15s ease",
+    display: "inline-flex",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: "0.375rem",
+    opacity: disabled ? 0.6 : 1,
+  };
+
+  const variants = {
+    primary: {
+      backgroundColor: "var(--accent)",
+      color: "var(--bg-primary)",
+      border: "none",
+    },
+    secondary: {
+      backgroundColor: "transparent",
+      color: "var(--text-primary)",
+      border: "1px solid var(--border)",
+    },
+    ghost: {
+      backgroundColor: "transparent",
+      color: "var(--text-secondary)",
+      border: "none",
+    },
+  };
+
   return (
     <button
       type={type}
       onClick={onClick}
-      className={`px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-lg shadow-sm hover:bg-blue-500 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:ring-offset-2 transition ${className}`}
+      disabled={disabled}
+      className={className}
+      style={{ ...baseStyles, ...variants[variant] }}
     >
       {label}
     </button>

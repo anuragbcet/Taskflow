@@ -1,14 +1,6 @@
-import React, { useState } from "react";
-import { useNavigate } from "react-router-dom"
-import {
-  EnvelopeIcon,
-  LockClosedIcon,
-  EyeIcon,
-  EyeSlashIcon,
-  ExclamationCircleIcon,
-  RocketLaunchIcon,
-  ArrowRightIcon,
-} from "@heroicons/react/24/outline";
+import React, { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { SunIcon, MoonIcon } from "@heroicons/react/24/outline";
 
 const Login = () => {
   const [email, setEmail] = useState("");
@@ -16,10 +8,25 @@ const Login = () => {
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
-  const [rememberMe, setRememberMe] = useState(false);
+  const [isDark, setIsDark] = useState(false);
   const navigate = useNavigate();
 
-  // Handles login form submission
+  useEffect(() => {
+    const savedTheme = localStorage.getItem("theme");
+    const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    if (savedTheme === "dark" || (!savedTheme && prefersDark)) {
+      setIsDark(true);
+      document.documentElement.setAttribute("data-theme", "dark");
+    }
+  }, []);
+
+  const toggleTheme = () => {
+    const newTheme = !isDark;
+    setIsDark(newTheme);
+    document.documentElement.setAttribute("data-theme", newTheme ? "dark" : "light");
+    localStorage.setItem("theme", newTheme ? "dark" : "light");
+  };
+
   const handleLogin = async (e) => {
     e.preventDefault();
     setError("");
@@ -28,24 +35,16 @@ const Login = () => {
     try {
       const response = await fetch("http://localhost:5000/auth/login", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
       });
 
       if (!response.ok) {
-        throw new Error("Invalid email or password. Please try again.");
+        throw new Error("Invalid credentials. Please try again.");
       }
 
       const { token } = await response.json();
       localStorage.setItem("token", token);
-
-      if (rememberMe) {
-        localStorage.setItem("rememberEmail", email);
-      }
-
-      // Redirect to dashboard
       window.location.href = "/dashboard";
     } catch (err) {
       setError(err.message);
@@ -55,250 +54,239 @@ const Login = () => {
   };
 
   return (
-    <div className="min-h-screen bg-black text-white flex items-center justify-center p-4 overflow-hidden relative">
-      {/* Animated Background */}
-      <div className="absolute inset-0 opacity-30 pointer-events-none">
-        <div className="absolute top-20 left-10 w-80 h-80 bg-blue-600 rounded-full blur-3xl animate-pulse"></div>
-        <div className="absolute bottom-20 right-10 w-80 h-80 bg-cyan-600 rounded-full blur-3xl animate-pulse" style={{ animationDelay: "1s" }}></div>
-      </div>
+    <div style={{
+      minHeight: "100vh",
+      backgroundColor: "var(--bg-primary)",
+      display: "flex",
+      flexDirection: "column"
+    }}>
+      <nav style={{
+        padding: "1rem 1.5rem",
+        display: "flex",
+        justifyContent: "space-between",
+        alignItems: "center"
+      }}>
+        <span
+          onClick={() => navigate("/")}
+          style={{
+            fontSize: "1.25rem",
+            fontWeight: 600,
+            letterSpacing: "-0.02em",
+            cursor: "pointer"
+          }}
+        >
+          TaskFlow
+        </span>
 
-      <div className="relative w-full max-w-5xl">
-        <div className="grid lg:grid-cols-2 gap-8 lg:gap-12 items-center">
-          {/* Left Side - Branding */}
-          <div className="hidden lg:flex flex-col justify-center">
-            <div className="mb-8">
-              <div className="flex items-center gap-3 mb-6">
-                <div className="p-3 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg">
-                  <RocketLaunchIcon className="h-8 w-8 text-white" />
-                </div>
-                <span
-                  onClick={()=>navigate("/")}
-                  className="text-3xl font-bold bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
-                  TaskFlow
-                </span>
-              </div>
+        <button
+          onClick={toggleTheme}
+          style={{
+            padding: "0.5rem",
+            borderRadius: "8px",
+            border: "none",
+            backgroundColor: "transparent",
+            color: "var(--text-secondary)",
+            cursor: "pointer",
+            display: "flex"
+          }}
+        >
+          {isDark ? <SunIcon style={{ width: 20, height: 20 }} /> : <MoonIcon style={{ width: 20, height: 20 }} />}
+        </button>
+      </nav>
 
-              <h1 className="text-5xl font-bold mb-4 leading-tight">
-                Welcome Back to{" "}
-                <span className="bg-gradient-to-r from-blue-500 to-cyan-500 bg-clip-text text-transparent">
-                  Productivity
-                </span>
-              </h1>
-
-              <p className="text-xl text-gray-400 mb-8 leading-relaxed">
-                Access your tasks, collaborate with your team, and stay focused on what matters most.
-              </p>
-
-              <div className="space-y-4">
-                {[
-                  { icon: "✓", text: "Secure authentication with encryption" },
-                  { icon: "✓", text: "Instant access to all your tasks" },
-                  { icon: "✓", text: "Real-time synchronization across devices" },
-                ].map((item, i) => (
-                  <div key={i} className="flex items-center gap-3 text-gray-300">
-                    <span className="text-cyan-500 font-bold text-lg">{item.icon}</span>
-                    {item.text}
-                  </div>
-                ))}
-              </div>
-            </div>
+      <div style={{
+        flex: 1,
+        display: "flex",
+        alignItems: "center",
+        justifyContent: "center",
+        padding: "2rem 1.5rem"
+      }}>
+        <div style={{ width: "100%", maxWidth: "380px" }}>
+          <div style={{ textAlign: "center", marginBottom: "2rem" }}>
+            <h1 style={{
+              fontSize: "1.75rem",
+              fontWeight: 700,
+              letterSpacing: "-0.02em",
+              marginBottom: "0.5rem"
+            }}>
+              Welcome back
+            </h1>
+            <p style={{ color: "var(--text-secondary)", fontSize: "0.9375rem" }}>
+              Sign in to continue to your dashboard
+            </p>
           </div>
 
-          {/* Right Side - Login Form */}
-          <div className="w-full">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-to-br from-blue-600/20 to-cyan-600/20 rounded-2xl blur-2xl opacity-50"></div>
+          {error && (
+            <div style={{
+              padding: "0.875rem 1rem",
+              marginBottom: "1.5rem",
+              backgroundColor: isDark ? "rgba(239, 68, 68, 0.1)" : "rgba(239, 68, 68, 0.05)",
+              border: "1px solid rgba(239, 68, 68, 0.2)",
+              borderRadius: "8px",
+              color: "#ef4444",
+              fontSize: "0.875rem"
+            }}>
+              {error}
+            </div>
+          )}
 
-              <div
-                onSubmit={handleLogin}
-                className="relative bg-gray-900 border border-gray-800 rounded-2xl p-8 md:p-10 backdrop-blur-xl"
-              >
-                {/* Header */}
-                <div className="mb-8">
-                  <div className="flex items-center justify-center lg:hidden mb-6">
-                    <div className="p-3 bg-gradient-to-br from-blue-500 to-cyan-500 rounded-lg">
-                      <RocketLaunchIcon className="h-6 w-6 text-white" />
-                    </div>
-                  </div>
-                  <h2 className="text-3xl font-bold text-center mb-2">Sign In</h2>
-                  <p className="text-center text-gray-400">
-                    Enter your credentials to access your dashboard
-                  </p>
-                </div>
+          <form onSubmit={handleLogin}>
+            <div style={{ marginBottom: "1.25rem" }}>
+              <label style={{
+                display: "block",
+                fontSize: "0.875rem",
+                fontWeight: 500,
+                marginBottom: "0.5rem"
+              }}>
+                Email
+              </label>
+              <input
+                type="email"
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                placeholder="you@example.com"
+                required
+                style={{
+                  width: "100%",
+                  padding: "0.75rem 1rem",
+                  fontSize: "0.9375rem",
+                  backgroundColor: "var(--input-bg)",
+                  border: "1px solid var(--border)",
+                  borderRadius: "8px",
+                  color: "var(--text-primary)",
+                  outline: "none"
+                }}
+              />
+            </div>
 
-                {/* Error Message */}
-                {error && (
-                  <div className="mb-6 p-4 bg-red-500/10 border border-red-500/50 rounded-lg flex items-start gap-3 animate-shake">
-                    <ExclamationCircleIcon className="h-5 w-5 text-red-500 flex-shrink-0 mt-0.5" />
-                    <p className="text-red-400 text-sm">{error}</p>
-                  </div>
-                )}
-
-                {/* Email Input */}
-                <div className="mb-6">
-                  <label className="block text-gray-300 text-sm font-semibold mb-2">
-                    Email Address
-                  </label>
-                  <div className="relative">
-                    <EnvelopeIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
-                    <input
-                      type="email"
-                      placeholder="you@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="w-full pl-12 pr-4 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all duration-300 text-white placeholder-gray-500"
-                      required
-                    />
-                  </div>
-                </div>
-
-                {/* Password Input */}
-                <div className="mb-6">
-                  <label className="block text-gray-300 text-sm font-semibold mb-2">
-                    Password
-                  </label>
-                  <div className="relative">
-                    <LockClosedIcon className="absolute left-4 top-1/2 -translate-y-1/2 h-5 w-5 text-gray-500" />
-                    <input
-                      type={showPassword ? "text" : "password"}
-                      placeholder="••••••••"
-                      value={password}
-                      onChange={(e) => setPassword(e.target.value)}
-                      className="w-full pl-12 pr-12 py-3 bg-gray-800 border border-gray-700 rounded-lg focus:outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20 transition-all duration-300 text-white placeholder-gray-500"
-                      required
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-400 transition-colors"
-                    >
-                      {showPassword ? (
-                        <EyeSlashIcon className="h-5 w-5" />
-                      ) : (
-                        <EyeIcon className="h-5 w-5" />
-                      )}
-                    </button>
-                  </div>
-                </div>
-
-                {/* Remember Me & Forgot Password */}
-                <div className="flex items-center justify-between mb-8">
-                  <label className="flex items-center gap-2 cursor-pointer">
-                    <input
-                      type="checkbox"
-                      checked={rememberMe}
-                      onChange={(e) => setRememberMe(e.target.checked)}
-                      className="w-4 h-4 bg-gray-800 border border-gray-700 rounded accent-cyan-500 cursor-pointer"
-                    />
-                    <span className="text-sm text-gray-400 hover:text-gray-300 transition-colors">
-                      Remember me
-                    </span>
-                  </label>
-                  <button
-                    type="button"
-                    onClick={() => window.location.href = "/forgot-password"}
-                    className="text-sm text-cyan-500 hover:text-cyan-400 transition-colors font-medium"
-                  >
-                    Forgot Password?
-                  </button>
-                </div>
-
-                {/* Login Button */}
+            <div style={{ marginBottom: "1.25rem" }}>
+              <label style={{
+                display: "block",
+                fontSize: "0.875rem",
+                fontWeight: 500,
+                marginBottom: "0.5rem"
+              }}>
+                Password
+              </label>
+              <div style={{ position: "relative" }}>
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder="Enter your password"
+                  required
+                  style={{
+                    width: "100%",
+                    padding: "0.75rem 1rem",
+                    paddingRight: "3rem",
+                    fontSize: "0.9375rem",
+                    backgroundColor: "var(--input-bg)",
+                    border: "1px solid var(--border)",
+                    borderRadius: "8px",
+                    color: "var(--text-primary)",
+                    outline: "none"
+                  }}
+                />
                 <button
-                  onClick={handleLogin}
-                  disabled={loading}
-                  className="w-full bg-gradient-to-r from-blue-600 to-cyan-600 text-white py-3 rounded-lg font-bold text-lg hover:shadow-2xl hover:shadow-blue-500/50 transition-all duration-300 transform hover:scale-105 disabled:opacity-75 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  style={{
+                    position: "absolute",
+                    right: "0.75rem",
+                    top: "50%",
+                    transform: "translateY(-50%)",
+                    background: "none",
+                    border: "none",
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    fontSize: "0.8125rem"
+                  }}
                 >
-                  {loading ? (
-                    <>
-                      <div className="animate-spin h-5 w-5 border-2 border-white border-t-transparent rounded-full"></div>
-                      Signing in...
-                    </>
-                  ) : (
-                    <>
-                      Sign In
-                      <ArrowRightIcon className="h-5 w-5" />
-                    </>
-                  )}
+                  {showPassword ? "Hide" : "Show"}
                 </button>
-
-                {/* Divider */}
-                <div className="relative my-8">
-                  <div className="absolute inset-0 flex items-center">
-                    <div className="w-full border-t border-gray-700"></div>
-                  </div>
-                  <div className="relative flex justify-center text-sm">
-                    <span className="px-2 bg-gray-900 text-gray-500">or</span>
-                  </div>
-                </div>
-
-                {/* Social Login */}
-                <div className="grid grid-cols-2 gap-4 mb-8">
-                  {[
-                    { name: "Google", icon: "G" },
-                    { name: "GitHub", icon: "⚡" },
-                  ].map((social) => (
-                    <button
-                      key={social.name}
-                      type="button"
-                      onClick={() => console.log(`Login with ${social.name}`)}
-                      className="py-3 px-4 bg-gray-800 border border-gray-700 rounded-lg hover:border-gray-600 transition-all duration-300 font-medium text-sm flex items-center justify-center gap-2 hover:bg-gray-700/50"
-                    >
-                      <span>{social.icon}</span>
-                      {social.name}
-                    </button>
-                  ))}
-                </div>
-
-                {/* Register Link */}
-                <div className="text-center">
-                  <p className="text-gray-400 mb-1">Don't have an account?</p>
-                  <button
-                    type="button"
-                    onClick={() => navigate("/register")}
-                    className="text-cyan-500 hover:text-cyan-400 font-bold transition-colors inline-flex items-center gap-2"
-                  >
-                    Create Account
-                    <ArrowRightIcon className="h-4 w-4" />
-                  </button>
-                </div>
               </div>
             </div>
 
-            {/* Trust Badges */}
-            <div className="mt-8 grid grid-cols-3 gap-4 lg:grid-cols-3">
-              {[
-                { icon: "🔒", text: "SSL Secure" },
-                { icon: "✓", text: "Verified" },
-                { icon: "⚡", text: "Instant Access" },
-              ].map((badge, i) => (
-                <div key={i} className="text-center">
-                  <p className="text-2xl mb-2">{badge.icon}</p>
-                  <p className="text-xs text-gray-500">{badge.text}</p>
-                </div>
-              ))}
-            </div>
+            <button
+              type="submit"
+              disabled={loading}
+              style={{
+                width: "100%",
+                padding: "0.875rem",
+                fontSize: "0.9375rem",
+                fontWeight: 500,
+                backgroundColor: "var(--accent)",
+                color: "var(--bg-primary)",
+                border: "none",
+                borderRadius: "8px",
+                cursor: loading ? "not-allowed" : "pointer",
+                opacity: loading ? 0.7 : 1,
+                marginBottom: "1.5rem"
+              }}
+            >
+              {loading ? "Signing in..." : "Sign in"}
+            </button>
+          </form>
+
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "1rem",
+            marginBottom: "1.5rem"
+          }}>
+            <div style={{ flex: 1, height: "1px", backgroundColor: "var(--border)" }} />
+            <span style={{ fontSize: "0.8125rem", color: "var(--text-muted)" }}>or</span>
+            <div style={{ flex: 1, height: "1px", backgroundColor: "var(--border)" }} />
           </div>
+
+          <div style={{ display: "flex", gap: "0.75rem", marginBottom: "2rem" }}>
+            <button style={{
+              flex: 1,
+              padding: "0.75rem",
+              fontSize: "0.875rem",
+              fontWeight: 500,
+              backgroundColor: "var(--bg-tertiary)",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              color: "var(--text-primary)",
+              cursor: "pointer"
+            }}>
+              Google
+            </button>
+            <button style={{
+              flex: 1,
+              padding: "0.75rem",
+              fontSize: "0.875rem",
+              fontWeight: 500,
+              backgroundColor: "var(--bg-tertiary)",
+              border: "1px solid var(--border)",
+              borderRadius: "8px",
+              color: "var(--text-primary)",
+              cursor: "pointer"
+            }}>
+              GitHub
+            </button>
+          </div>
+
+          <p style={{
+            textAlign: "center",
+            fontSize: "0.875rem",
+            color: "var(--text-secondary)"
+          }}>
+            Don't have an account?{" "}
+            <span
+              onClick={() => navigate("/register")}
+              style={{
+                color: "var(--text-primary)",
+                fontWeight: 500,
+                cursor: "pointer"
+              }}
+            >
+              Sign up
+            </span>
+          </p>
         </div>
       </div>
-
-      <style jsx>{`
-        @keyframes shake {
-          0%, 100% {
-            transform: translateX(0);
-          }
-          25% {
-            transform: translateX(-5px);
-          }
-          75% {
-            transform: translateX(5px);
-          }
-        }
-
-        .animate-shake {
-          animation: shake 0.5s ease-in-out;
-        }
-      `}</style>
     </div>
   );
 };
