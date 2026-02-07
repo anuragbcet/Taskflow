@@ -10,6 +10,7 @@ import {
   SunIcon,
   MoonIcon,
   ChevronDownIcon,
+  ArrowRightIcon,
 } from "@heroicons/react/24/outline";
 import { BACKEND_URL } from "../utils/config";
 
@@ -59,33 +60,42 @@ const Dashboard = () => {
     fetchTasks();
   }, [navigate]);
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem("token");
-    return {
-      "Content-Type": "application/json",
-      "Authorization": `Bearer ${token}`
-    };
-  };
+const getAuthHeaders = () => {
+  const token = localStorage.getItem("token");
+  if (!token) return {};
 
-  const fetchTasks = async () => {
-    try {
-      const res = await fetch(`${API_URL}/tasks`, {
-        method:"GET",
-        headers: getAuthHeaders()
-      });
-      if (res.status === 403) {
-        localStorage.removeItem("token");
-        navigate("/login");
-        return;
-      }
-      const data = await res.json();
-      setTasks(data);
-    } catch (err) {
-      console.error("Failed to fetch tasks");
-    } finally {
-      setLoading(false);
-    }
+  return {
+    "Content-Type": "application/json",
+    "Authorization": `Bearer ${token}`
   };
+};
+
+const fetchTasks = async () => {
+  try {
+    const res = await fetch(`${API_URL}/tasks`, {
+      method: "GET",
+      headers: getAuthHeaders()
+    });
+
+    if (res.status === 401 || res.status === 403) {
+      localStorage.removeItem("token");
+      navigate("/login");
+      return;
+    }
+
+    if (!res.ok) {
+      throw new Error(`Server error: ${res.status}`);
+    }
+
+    const data = await res.json().catch(() => null);
+    setTasks(data || []);
+  } catch (err) {
+    console.error("Failed to fetch tasks:", err);
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   const toggleTheme = () => {
     const newTheme = !isDark;
@@ -333,7 +343,7 @@ const Dashboard = () => {
                       textAlign: "left"
                     }}
                   >
-                    <ArrowRightOnRectangleIcon style={{ width: 16, height: 16 }} />
+                    <ArrowRightIcon style={{ width: 16, height: 16 }} />
                     Sign out
                   </button>
                 </div>
