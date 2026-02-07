@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { SunIcon, MoonIcon } from "@heroicons/react/24/outline";
+import { BACKEND_URL } from "../utils/config";
 
 const Register = () => {
   const [name, setName] = useState("");
@@ -66,7 +67,7 @@ const Register = () => {
     setLoading(true);
 
     try {
-      const response = await fetch("http://localhost:5000/auth/register", {
+      const response = await fetch(`${BACKEND_URL}/auth/register`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name, email, password }),

@@ -10,10 +10,10 @@ import {
   SunIcon,
   MoonIcon,
   ChevronDownIcon,
-  ArrowRightOnRectangleIcon,
 } from "@heroicons/react/24/outline";
+import { BACKEND_URL } from "../utils/config";
 
-const API_URL = "http://localhost:5000";
+const API_URL =BACKEND_URL;
 
 const Dashboard = () => {
   const navigate = useNavigate();
