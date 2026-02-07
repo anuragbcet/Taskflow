@@ -70,6 +70,7 @@ const Dashboard = () => {
   const fetchTasks = async () => {
     try {
       const res = await fetch(`${API_URL}/tasks`, {
+        method:"GET",
         headers: getAuthHeaders()
       });
       if (res.status === 403) {
